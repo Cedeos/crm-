@@ -60,4 +60,5 @@ jobs:
           gcloud run services update ${{ env.SERVICE }} \
             --project=${{ env.PROJECT_ID }} \
             --region=${{ env.REGION }} \
-            --image=${{ env.IMAGE }}:${{ github.sha }}
+            --image=${{ env.IMAGE }}:${{ github.sha }} \
+            --update-env-vars=DISABLE_DB_MIGRATIONS=true,DISABLE_CRON_JOBS_REGISTRATION=false
