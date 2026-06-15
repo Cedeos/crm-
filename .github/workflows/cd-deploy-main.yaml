@@ -61,4 +61,5 @@ jobs:
             --project=${{ env.PROJECT_ID }} \
             --region=${{ env.REGION }} \
             --image=${{ env.IMAGE }}:${{ github.sha }} \
+            --port=3000 \
             --update-env-vars=DISABLE_DB_MIGRATIONS=true,DISABLE_CRON_JOBS_REGISTRATION=false
