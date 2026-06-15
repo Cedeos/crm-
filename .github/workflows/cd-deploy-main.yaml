@@ -1,21 +1,63 @@
-name: CD deploy main
+name: CD deploy hub
 
 permissions:
   contents: read
+  id-token: write
 
 on:
   push:
     branches:
       - main
 
+env:
+  PROJECT_ID: cedeos
+  REGION: africa-south1
+  REGISTRY: africa-south1-docker.pkg.dev
+  IMAGE: africa-south1-docker.pkg.dev/cedeos/cedeos-docker/twenty-patched
+  SERVICE: cedeos-hub
+  WIF_PROVIDER: projects/812850502061/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+  WIF_SA: cedeos-github-deploy@cedeos.iam.gserviceaccount.com
+
 jobs:
-  deploy-main:
-    timeout-minutes: 3
+  build-and-deploy:
+    name: Build & deploy to Cloud Run
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+
     steps:
-      - name: Repository Dispatch
-        env:
-          GH_TOKEN: ${{ secrets.TWENTY_INFRA_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SA }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      - name: Enable long paths for git
+        run: git config --global core.longpaths true
+
+      - name: Build Docker image
         run: |
-          gh api repos/twentyhq/twenty-infra/dispatches \
-            -f event_type=auto-deploy-main
+          docker build \
+            --target twenty \
+            -f packages/twenty-docker/twenty/Dockerfile \
+            --platform linux/amd64 \
+            --tag ${{ env.IMAGE }}:${{ github.sha }} \
+            --tag ${{ env.IMAGE }}:latest \
+            .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.IMAGE }}:${{ github.sha }}
+          docker push ${{ env.IMAGE }}:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run services update ${{ env.SERVICE }} \
+            --project=${{ env.PROJECT_ID }} \
+            --region=${{ env.REGION }} \
+            --image=${{ env.IMAGE }}:${{ github.sha }}
